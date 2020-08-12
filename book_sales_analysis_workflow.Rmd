@@ -1,0 +1,149 @@
+---
+title: "Creating efficient data analysis workflow for book sales dataset"
+author: "Bart Baranowski"
+date: "12/08/2020"
+output: html_document
+---
+
+# Initial setup
+
+**Loading libraries and the dataset from the `book_reviews.csv` CSV file**
+
+```{r}
+library(tidyverse)
+reviews <- read_csv("book_reviews.csv")
+```
+
+
+## Getting familiar with the data
+There are many things to check with a dataset before I dive into the analysis, e.g.:
+
+* How much data is there? 
+* What kind of data do we actually have on hand? 
+* Is there anything "weird" that might interfere with any analysis I might need to do? 
+* Is there missing data? 
+
+Answering these questions first will save me time and effort later.
+
+If I don't check the data beforehand, it's easy to make some false assumptions about the data that can hinder the progress later. For example, column data could look like a number, but it's actually stored as a string. Perhaps some things were misspelled. That's why getting familiar with the data is the first step in the data analysis workflow. 
+
+```{r}
+# How big is the dataset?
+dim(reviews)
+# What are the column names?
+colnames(reviews)
+```
+```{r}
+# What are the column types?
+for (c in colnames(reviews)) {
+  print(typeof(reviews[[c]]))
+}
+```
+
+```{r}
+# What are the unique values in each column?
+for (c in colnames(reviews)) {
+  print("Unique values in the column:")
+  print(c)
+  print(unique(reviews[[c]]))
+  print("")
+}
+```
+
+The `reviews` column represents the review score. The `book` column indicates which particular textbook was purchased. The `state` column represents the state in which the book was purchased. The `price` column represents the price that the book was purchased for.
+
+
+## Handling missing data
+
+There are two ways to deal with missing data: 
+
+1. Remove any rows or columns that have missing data (typically, rows). 
+1. Fill in the missing data in an informed, discipline way.
+
+The `review` column contains some `NA` values. In this project I'm going to remove rows with the missing values. 
+
+```{r}
+complete_reviews = reviews %>% 
+  filter(!is.na(review))
+dim(complete_reviews)
+```
+
+I removed about 10% of the original dataset, which is ~200 reviews. At this stage it's good to ask yourself if removing that much data will affect the findings of any calculations we end up doing? It's important to keep questions like this in mind as we clean the data. In this case, as the focus is on the R process I'm okay with rows' deletion.
+
+Now that I've removed all of the missing data from the dataset I have a complete dataset. 
+
+
+## Dealing with inconsistent labels
+
+The next thing that I need to work on is the `state` column. 
+
+You may have noticed that the labeling for each state is inconsistent. 
+For example, California is written as both "California" and "CA". Both "California" and "CA" refer to the same place in the United States, so I will clean this up. 
+
+I need to choose one way and stick to that convention. Making labels/strings more consistent in the data will make things easier to analyze later on. I'll use the shortened postal codes in this case, because they're shorter.
+
+```{r}
+complete_reviews <- complete_reviews %>% 
+  mutate(
+    state = case_when(
+      state == "California" ~ "CA",
+      state == "New York" ~ "NY",
+      state == "Texas" ~ "TX",
+      state == "Florida" ~ "FL",
+      TRUE ~ state # ignore cases where it's already postal code
+    )
+  )
+```
+
+
+## Transforming the review data
+
+The first things I'll handle in the dataset are the reviews. You may have noticed in our data exploration that the reviews take the form of strings, ranging from "Poor" to "Excellent". Our goal is to evaluate the ratings of each of the textbooks, but there's not much we can do with text versions of the review scores. It would be better if we could convert the reviews into a numerical form.
+
+It would also be helpful to have another column that helps us decide if a score is "high" or not.
+let's decide that a score of 4 or higher qualifies as a "high" score.
+
+I will create a new column in the dataset called `is_high_review` that will show  `TRUE` if `review_num` is 4 or higher, and `FALSE` otherwise.
+```{r}
+complete_reviews <- complete_reviews %>% 
+  mutate(
+    review_num = case_when(
+      review == "Poor" ~ 1,
+      review == "Fair" ~ 2,
+      review == "Good" ~ 3,
+      review == "Great" ~ 4,
+      review == "Excellent" ~ 5
+    ),
+    is_high_review = if_else(review_num >= 4, TRUE, FALSE)
+  )
+```
+
+
+## Data analysis
+
+With all of the data cleaning done we're now ready to do some data analysis.
+
+The main objective is to figure out what book is the most profitable. 
+The dataset represents customer purchases. One way to define "most profitable" might be to just choose the book that's purchased the most. Another way to define it would be to see how much money each book generated overall.
+
+I'll define the most profitable book in terms of how many books were sold. 
+This metric could also be the measure of book popularity. 
+
+```{r}
+complete_reviews %>% 
+  group_by(book) %>% 
+  summarize(
+    purchased = n()
+  ) %>% 
+  arrange(-purchased)
+```
+
+
+## Conclusions
+
+I started with the goal to answer the question: *"What's our most profitable book?"*.  
+
+The books are relatively well matched in terms of purchasing, but **"Fundamentals of R For Beginners"** has a slight edge over everyone else. 
+
+There are several sub-questions that might need to be answered along with this question like, *"How do we know it's the most profitable?"* or *"How did we calculate our measure for profitability?"*.  
+
